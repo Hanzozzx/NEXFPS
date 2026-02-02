@@ -1,0 +1,237 @@
+Você é um engenheiro Android/Kotlin sênior (arquitetura + UI/UX premium + serviços/foreground + performance + baixo overhead). 
+Eu tenho um projeto Android existente de FPS Counter com overlay (WindowManager) escrito em Kotlin, com serviços e componentes parecidos com:
+- FpsOverlayService (TYPE_APPLICATION_OVERLAY + arrastar + customização)
+- FpsMonitorService (FPS via Choreographer/VSync + métricas)
+- FpsAccessibilityService (detecta app em foreground)
+- ShizukuService (execução de “dumpsys gfxinfo <pkg> framestats” e/ou SurfaceFlinger)
+- Preferences/Collectors (CPU/RAM/Bateria etc)
+
+A meta é transformar isso em um “FPS Counter” nível apps premium, comparável ao SceneTako FPS/contadores nativos de celular e estilo RedMagic: ou seja, FPS REAL e confiável durante o gameplay (não apenas estimado), overlay estável e visual profissional.
+
+========================
+1) BRANDING OBRIGATÓRIO
+========================
+- Nome novo do app: “Nex Fps Counter”
+- Atualizar applicationId/package se necessário (explique prós/contras e escolha a melhor opção).
+- Trocar o ícone do app usando como referência (baixar e integrar em mipmaps):
+  https://io/fQmmfSUL.png
+- Tema visual: ALL BLACK premium (preto real #000000 + variações muito escuras) com ícones coloridos modernos.
+- Atualizar também: app label, strings, notificações, assets e telas para refletir “Nex Fps Counter”.
+
+======================================================
+2) META PRINCIPAL: UI PREMIUM “FLUTTER-LIKE” (SEM FLUTTER)
+======================================================
+Quero refazer TODA a UI do app para ter acabamento semelhante a apps Flutter, mas sem usar Flutter:
+- espaçamentos e grid impecáveis
+- tipografia moderna e consistente
+- cards arredondados com “soft depth”
+- transições e microinterações
+- animações fluidas (entrada/saída, troca de abas, expansão de cards)
+- ícones novos, coloridos, consistentes (pack coeso)
+- padrão ALL BLACK: fundo preto + cards #0A0A0A/#101010/#141414 + acentos coloridos.
+
+Você pode implementar a UI com UM caminho:
+A) Jetpack Compose (recomendado para “Flutter-like”), OU
+B) Views/XML + MotionLayout.
+Escolha UM, justifique tecnicamente e aplique com consistência (não misturar sem necessidade).
+
+=====================================
+3) TELA DE BOAS-VINDAS (OBRIGATÓRIO)
+=====================================
+Ao abrir o app, exibir uma animação premium de “Bem-vindo” (splash/welcome):
+- dura EXATAMENTE 3 segundos
+- animação: fade + scale + glow sutil no logo/ícone
+- ALL BLACK
+- depois vai para Home/Dashboard automaticamente
+- não pode travar: inicialização de serviços e checagem de permissões devem ser assíncronas e seguras
+- depois da splash, se faltar permissão essencial, mostrar onboarding/permissões.
+
+=====================================
+4) OVERLAY OBRIGATÓRIO (FPS NA TELA DO JOGO)
+=====================================
+OBRIGATÓRIO: o FPS deve continuar aparecendo por cima de outros apps/jogos via overlay (WindowManager / TYPE_APPLICATION_OVERLAY).
+Não mover o contador para dentro da UI do app.
+O overlay deve funcionar durante o gameplay (inclusive fullscreen), com animações fluidas e visual premium.
+
+=====================================
+5) SHIZUKU É OBRIGATÓRIO (REGRA FORTE)
+=====================================
+A meta é FPS REAL comparável a contadores nativos/SceneTako/RedMagic. Então:
+- A integração com Shizuku NÃO é opcional. Ela é parte central do app.
+- Atualizar e padronizar integração com a API oficial (versão atual recomendada):
+  https://github.com/RikkaApps/Shizuku-API
+- Implementar fluxo profissional:
+  1) detectar se Shizuku está instalado
+  2) solicitar permissão (requestPermission)
+  3) validar execução com botão “Testar Shizuku” (rodar comando e confirmar saída)
+- Se Shizuku não estiver instalado ou sem permissão:
+  - Mostrar estado “bloqueado” para modo FPS real e explicar claramente que “Shizuku é obrigatório para FPS real”.
+  - Guiar o usuário com botões para instalar/abrir Shizuku e conceder permissão.
+  - Opcionalmente permitir um “modo degradado” (VSync) apenas como quebra-galho, sempre marcado como “Estimado”.
+
+=====================================
+6) FPS REAL “DE VERDADE” (PRIORIDADE MÁXIMA)
+=====================================
+A meta é “contar mesmo”, como contadores nativos. Implementar um motor de FPS com foco em precisão, estabilidade e baixo overhead.
+
+FONTE PRINCIPAL (OBRIGATÓRIA): FPS real do app/jogo em foreground via Shizuku
+- Usar Shizuku para executar:
+  `dumpsys gfxinfo <package> framestats`
+- Implementar parser robusto:
+  - extrair timestamps e dados necessários do framestats
+  - lidar com variações de formato, saída vazia, app sem frames, permissão negada
+- Cálculo (obrigatório):
+  - FPS atual em janela móvel (últimos X ms ou últimos N frames)
+  - frame time médio (ms)
+  - min/max
+  - (se possível) P90/P95 (frametime) para “stutter”
+- Estabilização (obrigatório):
+  - suavização configurável (EMA: OFF/LOW/MED/HIGH)
+  - anti-tremedeira do número no overlay (interpolação / rate limiting)
+- Performance (obrigatório):
+  - rodar em background (coroutines/Dispatchers.IO)
+  - evitar polling excessivo (configurar intervalo)
+  - fallback/limites quando o sistema ficar pesado
+
+FONTE SECUNDÁRIA (DEGRADADA): Choreographer/VSync
+- Usar apenas quando Shizuku estiver indisponível ou bloqueado
+- Sempre exibir “Estimado (VSync)” para não enganar o usuário
+
+DETECÇÃO DO APP EM FOREGROUND (obrigatório)
+- Usar Accessibility para obter o pacote em primeiro plano.
+- Quando trocar de jogo/app:
+  - atualizar imediatamente o target do FPS real (framestats) para o novo pacote
+  - limpar buffers/janelas e reaquecer cálculo sem spikes
+- “Apps Monitorados”:
+  - overlay aparece automaticamente apenas em apps selecionados (configurável)
+  - opção “sempre mostrar overlay” também deve existir
+
+=====================================
+7) CONTROLE AVANÇADO DO SISTEMA (COMO CONTADORES PREMIUM)
+=====================================
+Criar configurações para o usuário controlar o motor de FPS e métricas, com persistência:
+- taxa de atualização do overlay (ex: 250ms/500ms/1s)
+- janela do cálculo (últimos N frames ou X segundos)
+- suavização (EMA) e intensidade
+- modo performance (reduzir overhead: menos métricas, menos gráficos, menos updates)
+- perfil por app (cada jogo pode ter parâmetros próprios)
+- indicador de fonte do FPS (Real/Shizuku vs Estimado/VSync)
+- opção de exibir no overlay: FPS, frametime, 1% low (se conseguir), fonte, etc
+
+=====================================
+8) OUTRAS MÉTRICAS (CPU/RAM/GPU/BATERIA) E GRÁFICOS
+=====================================
+- Melhorar/expandir coleta de:
+  - RAM: total/usada/livre
+  - CPU: uso % (e por core se possível)
+  - bateria: nível, temperatura, corrente se disponível
+  - storage
+  - GPU: se não for viável sem root em alguns devices, deixar claro e oferecer alternativa
+- Criar página de “Monitor” com gráficos em tempo real (linha) com animação suave
+- Manter overhead baixo (opção de desligar gráficos)
+
+=====================================
+9) SONS, ALERTAS E DIAGNÓSTICO
+=====================================
+Sons (com toggle) e feedback:
+- iniciar/parar overlay
+- iniciar/parar monitoramento
+- alertas (FPS baixo, CPU alta, RAM alta)
+Vibração opcional (se aplicável).
+
+Alertas inteligentes configuráveis:
+- FPS abaixo de X por Y segundos
+- RAM acima de X%
+- temperatura acima de X (se disponível)
+
+Tela “Diagnóstico”:
+- permissões (overlay, accessibility, notifications)
+- Shizuku status + botão “Testar”
+- serviços rodando
+- pacote atual em foreground
+- fonte atual do FPS
+- resumo do último framestats parseado (sem travar) e botão “Gerar log copiável”
+
+=====================================
+10) TELAS DO APP (NAVEGAÇÃO MODERNA)
+=====================================
+Criar navegação moderna (bottom navigation ou rail) com:
+
+(1) Dashboard/Home
+- FPS grande + fonte (Real/Shizuku ou Estimado/VSync)
+- cards de CPU/RAM/GPU/bateria/temperatura/storage
+- status de permissões e serviços
+
+(2) Overlay/Contador
+- personalização completa + preview ao vivo
+- presets (Gaming/Minimal/Pro/Ultra)
+- exportar/importar JSON
+
+(3) Monitor/Métricas
+- dados completos + gráficos realtime
+
+(4) Apps Monitorados
+- lista com ícone + toggle + busca + filtros
+- regras de exibição automática do overlay
+
+(5) Sobre o Dev (obrigatória)
+ALL BLACK premium com card:
+- Foto/GIF acima do texto; muda a cada 30 segundos.
+- Fontes (se links inválidos, usar placeholder e deixar lista configurável):
+  GIF 1: https://illi.io/10mZ4IV.gif
+  GIF 2: https://lo/fQmZUlox.gif
+  GIF 3: https://o/fQm257) gif
+  GIF 4: https://lll.io/fQm757).gif
+- Texto (exibir exatamente):
+  “Olá, Sou Augusto Conhecido Como Hann. Criei Esse Aplicativo Para Ajudar Usuários A Ter contagem De Fps Em Jogos Mobile. Tenho 17 Anos Sou Do Rio De Janeiro, Brasil. Trabalho Programando A 4 Anos.
+  Discord Fazendo Bots, Games, Aplicativos e Entre mais. Use meu app e descubra.”
+
+(6) Linguagens/Skills
+Cards em grid com ícone + nome + descrição “para que serve”:
+- JavaScript, C#, Kotlin, Flutter, Java, Discord Bots, e “Entre Outros”.
+
+=====================================
+11) QUALIDADE / COMPATIBILIDADE
+=====================================
+- NÃO remover Kotlin.
+- Código modular e limpo (ui/, services/, data/, system/, overlay/).
+- Evitar leaks (receivers, WindowManager, coroutines, lifecycle).
+- Compatível Android 7 a 14:
+  - foreground service com notificação correta
+  - POST_NOTIFICATIONS no Android 13+
+  - overlays e restrições Android 10+
+- Sem crashes: tratar exceções e estados sem permissão.
+
+=====================================
+12) O QUE VOCÊ DEVE ENTREGAR (SEM TEORIA, COM CÓDIGO)
+=====================================
+Você deve entregar:
+
+(1) Diagnóstico do app atual com referências reais a classes/arquivos, explicando:
+- por que VSync não é “FPS real por app”
+- por que framestats é a fonte principal
+- pontos frágeis atuais (ex: integração Shizuku incompleta, falta de parser, etc)
+
+(2) Arquitetura nova:
+- estrutura de pacotes
+- principais classes e responsabilidades
+- fluxo de dados: foreground package -> FPS engine (Shizuku) -> overlay -> UI
+
+(3) Implementação (patch real):
+- lista de arquivos novos/modificados com caminhos
+- código completo das classes principais
+- atualizações em Gradle/Manifest/recursos (tema ALL BLACK, ícones, strings, splash 3s, shizuku)
+- implementação do parser de framestats + cálculo FPS + janelas e smoothing
+- integração forte com Accessibility + Apps monitorados
+
+(4) Checklist de testes:
+- Shizuku OK -> FPS real framestats durante gameplay
+- Shizuku ausente/sem permissão -> modo degradado (bem sinalizado) + fluxo de guia
+- troca de app foreground -> troca de target do framestats
+- overlay funcionando em fullscreen
+- splash 3s -> Home
+- desempenho/overhead baixo
+
+(5) Se alguma métrica (GPU/temperatura) for inviável sem root em alguns aparelhos, diga claramente e proponha alternativa real.
+
+IMPORTANTE: não responda com teoria; quero mudanças concretas, código e caminhos de arquivo. Trabalhe como um projeto premium nível SceneTako/contadores nativos/RedMagic.
